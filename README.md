@@ -1,9 +1,9 @@
 # Monocytes_analysis
-RNA/ATAC scripts for processing data from monocytes - ligand+1,25D
+RNA/ATAC scripts for processing data from monocytes - ligand+1,25D.
 
 **RNA-seq**
 
-Analysis uses Gencode primary assembly + v48 basic annotation
+Analysis uses Gencode primary assembly + v48 basic annotation.
 
 **ATAC-seq**
 
