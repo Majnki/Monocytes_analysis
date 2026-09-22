@@ -8,5 +8,7 @@ Analysis uses Gencode primary assembly + v48 basic annotation.
 **ATAC-seq**
 
 Same genome versions. 
+
 BLACKLIST used to filter out problematic regions --  **Kundaje unified exclusion set ENCFF356LFX**.
-Provided BED file only is a list of regions where all regions that exist in the list above were removed.
+
+Provided BED file is used for retain alignments whose coordinates fall within the regions permitted by the GRCh38 Kundaje unified exclusion complement. Used during the filtering script.
