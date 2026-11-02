@@ -1,11 +1,11 @@
 #!/bin/sh
 
-#SBATCH -J ATAC_filter_bam
+#SBATCH -J Filter_1
 #SBATCH -p batch
-#SBATCH -N 4
+#SBATCH -N 2
 #SBATCH --ntasks-per-node 8
 #SBATCH --mem 96gb
-#SBATCH --time 48:00:00
+#SBATCH --time 72:00:00
 #SBATCH --mail-type=END
 #SBATCH --mail-user=
 
@@ -13,20 +13,45 @@ module load tryton/binutils/2.34
 module load tryton/compiler/intel/2019
 
 export LD_LIBRARY_PATH=/users/scratch1/carlbergc/lib:$LD_LIBRARY_PATH
+## Run using this on command line
+## IMPORTANT: DO NOT FORGET TO UPDATE THE SCRIPT NAME BELOW BEFORE RUNNING THIS AFTER MODIFICATIONS!!!
+## As an additional safety feature against unintended overwriting of older results, always leave the run
+## command below without the concluding '.sh', and only add it manually on the command line
+## sh /research/groups/heikkinen/spheikki/scripts/ATACseqPipe_step4_read.filtering_v1.2_human.THP1s.Carlberg
+
+## Takes as input a folder of aligned sorted.bams, and filters them to mark and remove duplicates
+## (by location, i.e. likely PCR artefacts) and exclude reads that fall into blacklisted regions
+## (a merge of chrM analogous regions and ENCODE-identified poor mappability regions). The filtered
+## output is sorted and indexed sorted.bams. Separately stores also the excluded reads. Also runs
+## FastQC on the good sorted.bams and finally produces .tdf viz files.
+
+## Note: Make sure all the output folders exist before starting.
+## NOTE: To avoid conflicts arising from bam sorting during two separate step along the multistep
+##       samtools pipe, it is best to use enough cores to enable in-memory sorting. Typically this
+##       means something like min 16 cores (6G memory use is hardcoded to the samtools sorts below).
 
 
+## TO DO
+## - It may finally be a bad idea to have a samtools pipe that has two sorts in it. Looks
+##   like there are some conflicts in TEMP file access if samtoolsCores is less than about 16
+##   i.e. when fully in-memory sorting is not possible. Therefore, to increase the reliability
+##   of this script, it would be best to direct the output of the first sort to file,
+##   and continue with fixmate from there. However, presently the TEMP files are named
+##   differently in the two samtools sorts, and not fully tested whether already this prevents
+##   the conflicts.
 
-## Folder where the subfolders are to be found 
-projectFolder="/project"
+
+## Folder where the subfolders are to be found (do not use concluding slash here or below)
+projectFolder="/realign/"
 echo "projectfolder{$projectFolder}"
 
-
-
+## Common settings
+##   Note: Make sure the output folders exist before starting. Do not use concluding slash on
 samtoolCores="16" ## setting for samtools view '-q'
-qualityfilter="4" ## setting for samtools view '-q'
-goodRegionsBed="Goodregions.bed"
+qualityfilter="20" ## setting for samtools view '-q'
+goodRegionsBed="/Goodregions.bed"
 
-bamfolder="${projectFolder}/bam_full"
+bamfolder="${projectFolder}/mapped"
 echo "bamfolder{$bamfolder}"
 inputSuffix=$(echo "sorted.bam")
 echo "input suffix{$inputSuffix}"
@@ -36,6 +61,25 @@ echo "outfolderGood{$outfolderGood}"
 outfolderBad="${projectFolder}/badbams"
 echo "outfolderBad{$outfolderBad}"
 
+### Settings for FastQC. Do not use concluding slash here (esp for the 'qcOutputFolder').
+#qcInputFolder=$outfolderGood
+#qcOutputFolder=$projectFolder$(echo "/FastQC_filtered")
+#suffixToFind="sorted.bam"
+#threadCount="4"
+
+## Note: the summarizing script automatically adds a time stamp and .txt to the output file name
+#qcSumOutFileBase=$projectFolder$(echo "/notes/step4_Filter")
+#qcSumHeader="FastQC summary from ATACseq pipeline after step 4: Filter aligned reads and FastQC"
+
+
+## Settings for igvtools to generate the .tdfs
+#TDFinputFolder="${outfolderGood}"
+#TDFoutputFolder=$projectFolder$(echo "/tdf")
+#TDFinputEx="sorted.bam"
+#TDFfragLength="100" ## generally "the average fragment length of the library" (or rather the insert?) minus the average read length
+#TDFgenome="mm10"
+#TDFgenome="hg38"
+#TDFigvW="25"
 
 
 ### For logging of this pipeline step
@@ -46,7 +90,11 @@ logFile="${logFileBase}_${currDateTime}.txt" ## ...or this
 
 { # this "{" is for logging
 
-
+echo " "
+echo "Loading samtools module : "${samtoolsmodule}
+echo " "
+echo " kai"
+#module load "${samtoolsmodule}"
 
 echo " "
 samtools --version
@@ -87,7 +135,9 @@ for inbam in $(ls | grep "${inputSuffix}$"); do
     echo "   Output bad reads   : ${outSampleBad}"
     echo " "
 
-    ## To only mark and not remove duplicates, remove '-r' in markdup
+    ## Note: the two 'sort's within the same pipe get confused if the temp file prefix (-T) is
+    ##   the same for both. This only came up when using too few cores to enable fully in-memory
+    ##   sorting. Fixed now, though.
     samtools view \
     -b \
     -u \
@@ -106,7 +156,6 @@ for inbam in $(ls | grep "${inputSuffix}$"); do
      - \
      | \
      samtools fixmate \
-     -r \
      -m \
      -O "BAM" \
      - \
@@ -120,7 +169,6 @@ for inbam in $(ls | grep "${inputSuffix}$"); do
      - \
      | \
      samtools markdup \
-     -r \
      -s \
      -O "BAM" \
      - \
@@ -192,5 +240,6 @@ echo " "
 
 
 
-} 2>&1 | tee $logFile #
+} 2>&1 | tee $logFile # This makes all the outputs that are printed
+#+ to terminal between the first { and this one also to be printed in the specified log file
 
